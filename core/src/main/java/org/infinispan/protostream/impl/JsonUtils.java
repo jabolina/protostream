@@ -26,12 +26,14 @@ import java.io.IOException;
 import java.io.Reader;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.TimeZone;
 
+import org.infinispan.protostream.BaseMarshaller;
 import org.infinispan.protostream.ImmutableSerializationContext;
 import org.infinispan.protostream.ProtobufParser;
 import org.infinispan.protostream.ProtobufUtil;
@@ -269,7 +271,11 @@ public final class JsonUtils {
          }
       }
 
-      if (topLevel) {
+      if (WrappedMessage.knownWrappedDescriptor(ctx, messageDescriptor)) {
+         nestedWriter.flush();
+         byte[] serialized = baos.toByteArray();
+         writer.writeRawBytes(serialized, 0, serialized.length);
+      } else if (topLevel) {
          Integer topLevelTypeId = messageDescriptor.getTypeId();
          if (topLevelTypeId == null) {
             writer.writeString(WRAPPED_TYPE_NAME, messageDescriptor.getFullName());
@@ -726,6 +732,7 @@ public final class JsonUtils {
                // ignore unknown fields
                return;
             }
+            Class<?> clazz = null;
             switch (fieldNumber) {
                case WRAPPED_TYPE_ID:
                   typeId = (Integer) tagValue;
@@ -743,6 +750,15 @@ public final class JsonUtils {
                   wrappedContainerType = (String) tagValue;
                   GenericDescriptor descriptorByName = ctx.getDescriptorByName(wrappedContainerType);
                   messageHandler.onStart(descriptorByName);
+                  break;
+               case WrappedMessage.WRAPPED_INSTANT_SECONDS:
+               case WrappedMessage.WRAPPED_INSTANT_NANOS:
+                  searchProtoStreamAdapter(Instant.class);
+                  messageHandler.onTag(fieldNumber, fieldDescriptor, tagValue);
+                  break;
+               case WrappedMessage.WRAPPED_DATE_MILLIS:
+                  searchProtoStreamAdapter(Date.class);
+                  messageHandler.onTag(fieldNumber, fieldDescriptor, tagValue);
                   break;
                case WrappedMessage.WRAPPED_BYTE:
                case WrappedMessage.WRAPPED_SHORT:
@@ -769,6 +785,18 @@ public final class JsonUtils {
                      messageHandler.onEnd();
                   }
                   break;
+            }
+         }
+
+         private void searchProtoStreamAdapter(Class<?> clazz) {
+            if (wrappedContainerType == null) {
+               BaseMarshaller<?> marshaller = ctx.getMarshaller(clazz);
+               if (marshaller == null)
+                  throw new IllegalStateException("Unable to convert instant to JSON");
+
+               GenericDescriptor descriptor = ctx.getDescriptorByName(marshaller.getTypeName());
+               wrappedContainerType = descriptor.getFullName();
+               messageHandler.onStart(descriptor);
             }
          }
 

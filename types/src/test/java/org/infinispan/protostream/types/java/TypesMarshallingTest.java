@@ -11,6 +11,7 @@ import java.io.StringReader;
 import java.lang.invoke.MethodHandles;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -27,6 +28,7 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -69,7 +71,7 @@ public class TypesMarshallingTest {
             '}';
    }
 
-   @Parameterized.Parameters
+   @Parameterized.Parameters(name = "{0}")
    public static Object[][] marshallingMethods() {
       return Arrays.stream(MarshallingMethodType.values())
             .flatMap(t -> switch (t) {
@@ -84,6 +86,16 @@ public class TypesMarshallingTest {
             })
             .map(t -> new Object[]{t})
             .toArray(Object[][]::new);
+   }
+
+   @Test
+   public void testInstant() throws IOException {
+      testConfiguration.method.marshallAndUnmarshallTest(Instant.EPOCH, context, false);
+   }
+
+   @Test
+   public void testDate() throws IOException {
+      testConfiguration.method.marshallAndUnmarshallTest(new Date(), context, false);
    }
 
    @Test
@@ -337,6 +349,7 @@ public class TypesMarshallingTest {
 
             var copy = ProtobufUtil.fromWrappedByteArray(ctx, jsonBytes);
 
+            assertArrayEquals(bytes, jsonBytes);
             log.debugf("JSON: JSON bytes length=%s, JSON String=%s, original=%s, copy=%s", jsonBytes.length, json, original, copy);
             if (isArray) {
                assertArrayEquals((Object[]) original, (Object[]) copy);
